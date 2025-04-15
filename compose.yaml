@@ -1,0 +1,59 @@
+services:
+  # The application is a simple Python application that generates logs
+  # (maybe traces and metrics in future)
+  # It uses the OpenTelemetry SDK to instrument the code and send telemetry data to 
+  # the OpenTelemetry Collector.
+  app:
+    container_name: otel-example-app
+    hostname: app
+    image: otel-example
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 5678:5678
+    volumes:
+      - $HOME/.aws/:/root/.aws/
+      - $PWD/:/app/
+    working_dir: /app/
+    environment:
+      - RUNTIME_ENV=docker-dev
+    entrypoint: sleep infinity
+
+  # OpenTelemetry Collector is a vendor-agnostic agent that can receive, process,
+  # and export telemetry data (traces, metrics, logs) to various backends
+  # including Jaeger, Prometheus, Gafana Loki, and others.
+  # It can be used to collect telemetry data from your application and send it
+  # to a backend for storage and analysis.
+  otel-collector:
+    container_name: otel-example-otel-collector
+    hostname: otel-collector
+    image: otel/opentelemetry-collector-contrib:latest
+    ports:
+      - 4317:4317 # OTLP gRPC receiver
+    volumes:
+      - $PWD/otel-collector.yaml:/etc/otelcol-contrib/config.yaml
+    depends_on:
+      - app
+
+  # Loki is a log aggregation system designed to work with Grafana
+  loki:
+    image: grafana/loki:latest
+    hostname: loki
+    container_name: otel-example-loki
+    ports:
+      - 3100:3100
+    volumes:
+      - ./loki.yaml:/etc/loki/local-config.yaml
+      - ./loki-data:/loki  # Store logs and index on local disk
+
+  # Grafana is a visualization tool that can be used to view logs and metrics
+  # from Loki and other sources
+  grafana:
+    image: grafana/grafana:latest
+    container_name: otel-example-grafana
+    hostname: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - loki
